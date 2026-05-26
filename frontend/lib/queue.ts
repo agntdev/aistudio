@@ -1,5 +1,6 @@
 import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
+import Replicate from 'replicate';
 
 /**
  * T03: Training Pipeline Infrastructure
@@ -60,31 +61,51 @@ export async function enqueueTrainingJob(data: TrainingJobData) {
  * This is where the actual Replicate/Fal call happens.
  */
 export function createTrainingWorker() {
+  const replicate = new Replicate({
+    auth: process.env.REPLICATE_API_TOKEN,
+  });
+
   return new Worker<TrainingJobData>(
     'training',
     async (job) => {
       console.log(`[TrainingWorker] Processing job ${job.id} for project ${job.data.projectId}`);
 
-      // TODO (T03): 
-      // 1. Download the dataset from job.data.datasetUrl if needed
-      // 2. Upload to Replicate or Fal as training input
-      // 3. Start the training run
-      // 4. Store the Replicate training ID in DB / job data
-      // 5. Update job.progress() as webhooks come in
+      const { datasetUrl, triggerWord, resolution = 512, steps = 1000 } = job.data;
 
-      // For now, simulate a long training run
-      await job.updateProgress(10);
-      await new Promise((r) => setTimeout(r, 2000));
-      await job.updateProgress(50);
+      // 1. Start the actual Replicate training
+      // Using a popular Flux LoRA trainer (update model version as needed)
+      const training = await replicate.trainings.create({
+        version: "ostris/flux-dev-lora-trainer:4e0a6b2c1f8e9d7a3b5c6d4e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a", // placeholder - use latest from Replicate
+        input: {
+          input_images: datasetUrl, // zip URL from DO Spaces
+          trigger_word: triggerWord,
+          resolution,
+          steps,
+          // other hyperparameters can come from job.data
+        },
+        webhook: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/replicate`,
+        webhook_events_filter: ["start", "logs", "completed"],
+      });
 
-      // In real implementation, return the trained model version info
+      console.log(`[TrainingWorker] Started Replicate training: ${training.id}`);
+
+      await job.updateProgress(20);
+
+      // Store the training ID on the job for webhook correlation
+      await job.updateData({
+        ...job.data,
+        replicateTrainingId: training.id,
+      });
+
+      // The actual completion will be handled by the webhook
+      // For now we return the training ID so the caller can track it
       return {
-        status: 'completed',
-        modelVersion: 'replicate-model-version-id',
-        replicateTrainingId: 'training-xxx',
+        status: 'started',
+        replicateTrainingId: training.id,
+        replicateTrainingUrl: `https://replicate.com/p/${training.id}`,
       };
     },
-    { connection, concurrency: 2 } // Only 2 concurrent trainings to control cost
+    { connection, concurrency: 2 }
   );
 }
 
