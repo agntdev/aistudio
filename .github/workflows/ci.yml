@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs so an active branch's PR doesn't hold the queue.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: type-check + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # Provide harmless placeholders so the build doesn't crash on
+      # `process.env.X` access in lazy-init paths. Real prod values come
+      # from Vercel / Fly secrets.
+      REDIS_URL: redis://localhost:6379
+      ADMIN_API_TOKEN: ci-fake-admin-token
+      COST_CONTROL_ADMIN_TOKEN: ci-fake-admin-token
+      METRICS_TOKEN: ci-fake-metrics-token
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint --if-present
+        continue-on-error: true
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  docker:
+    name: docker build (frontend + worker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: aistudio-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.worker
+          push: false
+          tags: aistudio-worker:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

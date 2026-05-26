@@ -1,0 +1,91 @@
+# Local-dev stack for AIStudio.
+# `docker compose up` starts every external dependency the Next.js app
+# and the BullMQ worker need:
+#   - Postgres      (relational data — users, models, refunds, generations)
+#   - Redis         (BullMQ queue + T11 cost-control counters)
+#   - MinIO         (S3-compatible storage for training datasets — T02)
+#
+# The frontend itself runs via `npm run dev` so hot reload still works;
+# `docker compose --profile full up` brings the prod image up too.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aistudio
+      POSTGRES_PASSWORD: aistudio
+      POSTGRES_DB: aistudio
+    ports: ['5432:5432']
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aistudio']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--save', '60', '1000', '--appendonly', 'no']
+    ports: ['6379:6379']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000'  # S3 API
+      - '9001:9001'  # web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional production-mode containers (run via: docker compose --profile full up).
+  frontend:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://aistudio:aistudio@postgres:5432/aistudio
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: aistudio-training-datasets
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+    ports: ['3000:3000']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+
+  worker:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://aistudio:aistudio@postgres:5432/aistudio
+      REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
+    depends_on:
+      redis: { condition: service_healthy }
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

@@ -1,0 +1,40 @@
+# Fly.io config for the AIStudio training worker.
+# Deploy: `flyctl deploy --config fly.toml --dockerfile Dockerfile.worker`
+
+app = "aistudio-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile.worker"
+
+# No public service — the worker only talks to Redis + Replicate.
+[deploy]
+  release_command = ""
+  strategy = "rolling"
+
+[env]
+  NODE_ENV = "production"
+  LOG_LEVEL = "info"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"
+  # One machine per region; BullMQ concurrency is bounded by the worker
+  # itself (concurrency: 2 in createTrainingWorker).
+  count = 1
+
+# Auto-stop / auto-start so the worker pauses when the queue is empty.
+[http_service]
+  internal_port = 0
+  force_https = false
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+# Required Fly secrets (set via `flyctl secrets set`):
+#   REDIS_URL                 — managed Redis URL (Upstash / Fly Redis)
+#   REPLICATE_API_TOKEN       — Replicate training token
+#   REPLICATE_DESTINATION     — e.g. "aistudio/user-lora"
+#   REPLICATE_TRAINER_VERSION — Flux LoRA trainer version pin
+#   NEXT_PUBLIC_APP_URL       — for webhook callbacks (used by lib/queue)
+#   SENTRY_DSN                — optional
