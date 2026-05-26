@@ -5,6 +5,9 @@ import {
   releaseOperation,
   type Reservation,
 } from '@/lib/cost-control';
+import { logger } from '@/lib/logger';
+import { analytics } from '@/lib/analytics';
+import { counters, timers } from '@/lib/metrics';
 
 /**
  * POST /api/training/start
@@ -15,11 +18,13 @@ import {
  * generation, so it reserves 5 credits by default).
  */
 export async function POST(req: NextRequest) {
+  const stopTimer = timers.start('training.start.duration_ms');
   try {
     const body = await req.json();
     const { projectId, agentId, datasetUrl, triggerWord } = body;
 
     if (!projectId || !agentId || !datasetUrl || !triggerWord) {
+      counters.inc('training.start.error', { reason: 'bad-request' });
       return NextResponse.json(
         {
           error:
@@ -29,6 +34,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const log = logger.with({ projectId, agentId });
+
     const reservation = await reserveOperation({
       userId: agentId,
       op: 'train',
@@ -36,6 +43,8 @@ export async function POST(req: NextRequest) {
     });
 
     if (!reservation.ok) {
+      log.warn('training.start.denied', { code: reservation.code });
+      counters.inc('training.start.denied', { code: reservation.code });
       return NextResponse.json(reservation, { status: reservation.status });
     }
 
@@ -51,12 +60,16 @@ export async function POST(req: NextRequest) {
         steps: 1000,
       });
 
-      // Training is long-running; the worker keeps the concurrency slot
-      // until completion. The webhook handler should call
-      // releaseOperation when the training reaches a terminal state. For
-      // the MVP we release immediately on enqueue and trust the global
-      // daily cap + queue-level concurrency to bound real cost.
       await releaseOperation(ok, 'succeeded');
+
+      log.info('training.start.queued', { jobId: job.id });
+      counters.inc('training.start.queued');
+      analytics.capture({
+        distinctId: agentId,
+        event: 'training_started',
+        properties: { projectId, jobId: job.id },
+      });
+      stopTimer({ outcome: 'queued' });
 
       return NextResponse.json({
         success: true,
@@ -66,13 +79,14 @@ export async function POST(req: NextRequest) {
           'Training job queued. You will receive updates via webhook / polling.',
       });
     } catch (innerErr) {
-      // Enqueue failed — refund credits and free the slot before re-throwing.
       await releaseOperation(ok, 'failed');
       throw innerErr;
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'unknown';
-    console.error('Failed to start training', error);
+    logger.error('training.start.failed', error, { reqId: req.headers.get('x-request-id') });
+    counters.inc('training.start.error', { reason: 'exception' });
+    stopTimer({ outcome: 'error' });
     return NextResponse.json(
       { error: 'Failed to enqueue training job', detail: message },
       { status: 500 }
