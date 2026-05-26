@@ -1,0 +1,20 @@
+# Dockerfile for the BullMQ training worker (T03 / T11).
+# Runs scripts/worker.ts via tsx. Smaller surface than the Next.js image.
+
+FROM node:22-alpine AS deps
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/scripts ./scripts
+COPY frontend/lib ./lib
+COPY frontend/tsconfig.json ./tsconfig.json
+COPY frontend/package.json ./package.json
+RUN addgroup -S -g 1001 worker && adduser -S -u 1001 -G worker worker
+USER worker
+CMD ["npx", "tsx", "scripts/worker.ts"]
