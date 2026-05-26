@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, CheckCircle, AlertCircle, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { performLivenessCheck, type LivenessResult } from '@/lib/safety';
+import { performLivenessCheckOnVideo, type LivenessResult } from '@/lib/safety';
 
 interface LivenessVerificationProps {
   onVerified: (result: LivenessResult) => void;
@@ -38,20 +38,26 @@ export function LivenessVerification({ onVerified, requiredDuration = 5 }: Liven
 
       setStatus('recording');
 
-      // Run the (stub) liveness check
-      const livenessResult = await performLivenessCheck(requiredDuration);
+      if (!videoRef.current) {
+        throw new Error('Video element not ready');
+      }
+
+      // Real motion-based liveness check on the live video stream.
+      const livenessResult = await performLivenessCheckOnVideo(videoRef.current, {
+        durationSeconds: requiredDuration,
+      });
 
       setResult(livenessResult);
       setStatus('processing');
 
-      // Small delay to show "analyzing" state
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 400));
 
       if (livenessResult.verified) {
         setStatus('success');
         onVerified(livenessResult);
       } else {
-        throw new Error('Liveness check failed');
+        const reason = livenessResult.metadata?.rejectionReason || 'not enough motion';
+        throw new Error(`Liveness check failed: ${reason}`);
       }
     } catch (err: any) {
       console.error('Liveness error:', err);
