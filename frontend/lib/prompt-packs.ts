@@ -185,7 +185,11 @@ function substitute(tpl: string, vars: Record<string, string>): string {
 }
 
 export function listPromptPacks(): Array<Omit<PromptPack, 'templates'>> {
-  return PROMPT_PACKS.map(({ templates, ...rest }) => rest);
+  return PROMPT_PACKS.map((p) => {
+    const { templates: _templates, ...rest } = p;
+    void _templates;
+    return rest;
+  });
 }
 
 export function getPromptPack(id: string): PromptPack | undefined {

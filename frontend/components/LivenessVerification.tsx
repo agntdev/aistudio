@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Camera, CheckCircle, AlertCircle, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,9 +59,13 @@ export function LivenessVerification({ onVerified, requiredDuration = 5 }: Liven
         const reason = livenessResult.metadata?.rejectionReason || 'not enough motion';
         throw new Error(`Liveness check failed: ${reason}`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Liveness error:', err);
-      setError(err.message || 'Could not access camera or complete liveness check');
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Could not access camera or complete liveness check';
+      setError(message);
       setStatus('error');
     } finally {
       // Clean up camera

@@ -70,10 +70,12 @@ export default function AdminPanel() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const t = window.localStorage.getItem(STORAGE_KEY) ?? '';
-    if (t) {
-      setToken(t);
-      setAuthed(true);
-    }
+    if (!t) return;
+    // Persisted-token rehydration on mount — intentionally synchronous
+    // because it gates the rest of the page from rendering.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setToken(t);
+    setAuthed(true);
   }, []);
 
   const fetchJSON = useCallback(
@@ -123,6 +125,9 @@ export default function AdminPanel() {
   }, [fetchJSON]);
 
   useEffect(() => {
+    // Initial + auth-change refresh — refresh() internally drives state
+    // through setData/setLoading, which is the desired one-shot fetch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (authed) refresh();
   }, [authed, refresh]);
 

@@ -86,6 +86,9 @@ export default function GalleryPage() {
   }, [page, statusFilter]);
 
   useEffect(() => {
+    // Load the current page on mount / page / filter change. fetchPage
+    // drives setData/setLoading internally.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPage();
   }, [fetchPage]);
 
@@ -97,6 +100,7 @@ export default function GalleryPage() {
         .map((g) => g.id) ?? [],
     [data]
   );
+  const liveIdsKey = liveIds.join(',');
 
   useEffect(() => {
     if (liveIds.length === 0) return;
@@ -131,7 +135,10 @@ export default function GalleryPage() {
     es.addEventListener('done', () => es.close());
     es.onerror = () => es.close();
     return () => es.close();
-  }, [liveIds.join(',')]);
+    // liveIds itself is reference-unstable; key off the joined string so
+    // we resubscribe only when the actual id set changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveIdsKey]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 

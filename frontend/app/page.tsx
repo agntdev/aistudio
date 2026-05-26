@@ -1,6 +1,33 @@
 import Link from "next/link";
-import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import {
+  SignInButton as ClerkSignInButton,
+  SignUpButton as ClerkSignUpButton,
+  UserButton as ClerkUserButton,
+} from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+
+// When no real Clerk publishable key is configured (local dev / demo)
+// the @clerk/nextjs components throw because there's no ClerkProvider
+// in the tree. Fall back to plain links so the marketing page still
+// renders for showcases / screenshots.
+const HAS_REAL_CLERK =
+  !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.endsWith("placeholder");
+
+function SignInButton({ children }: { mode?: "modal"; children: React.ReactNode }) {
+  if (!HAS_REAL_CLERK) return <Link href="/sign-in">{children}</Link>;
+  return <ClerkSignInButton mode="modal">{children}</ClerkSignInButton>;
+}
+
+function SignUpButton({ children }: { mode?: "modal"; children: React.ReactNode }) {
+  if (!HAS_REAL_CLERK) return <Link href="/sign-up">{children}</Link>;
+  return <ClerkSignUpButton mode="modal">{children}</ClerkSignUpButton>;
+}
+
+function UserButton() {
+  if (!HAS_REAL_CLERK) return null;
+  return <ClerkUserButton />;
+}
 
 export default function AIStudioLanding() {
   return (

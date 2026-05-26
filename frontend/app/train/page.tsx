@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from 'react';
-import { Upload, X, CheckCircle, AlertTriangle, Image as ImageIcon, Download, Send, Shield } from 'lucide-react';
+import { Upload, X, CheckCircle, AlertTriangle, Download, Send, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -87,7 +87,7 @@ export default function TrainUploadPage() {
 
       // nsfwjs classes: Drawing, Hentai, Neutral, Porn, Sexy
       const nsfwClasses = ['Hentai', 'Porn', 'Sexy'];
-      const nsfwPred = predictions.find((p: any) => nsfwClasses.includes(p.className));
+      const nsfwPred = predictions.find((p) => nsfwClasses.includes(p.className));
 
       if (nsfwPred && nsfwPred.probability > 0.65) {
         return {
@@ -142,6 +142,10 @@ export default function TrainUploadPage() {
 
     const dropped = Array.from(e.dataTransfer.files);
     processFiles(dropped);
+    // processFiles closes over files.length which is the trigger we
+    // already capture; including processFiles itself would change
+    // every render and re-bind the drop handler unnecessarily.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files.length]);
 
   const handleSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,10 +256,11 @@ export default function TrainUploadPage() {
       });
 
       setZipReady(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
+      const message = err instanceof Error ? err.message : 'Check console for details';
       toast.error('Upload via presigned URLs failed', {
-        description: err.message || 'Check console for details',
+        description: message,
       });
     } finally {
       setIsProcessing(false);
@@ -263,7 +268,6 @@ export default function TrainUploadPage() {
   };
 
   const validFiles = files.filter(f => f.status === 'valid');
-  const hasIssues = files.some(f => f.status !== 'valid');
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -335,6 +339,8 @@ export default function TrainUploadPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {files.map((item, index) => (
                   <div key={index} className="group relative rounded-xl overflow-hidden border border-white/10 bg-zinc-950">
+                    {/* Local blob:// previews; next/image can't optimise them. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={item.preview}
                       alt={item.file.name}
