@@ -37,14 +37,19 @@ export default async function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-10">
-            <Link 
-              href="/train" 
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-4">
+            <Link
+              href="/train"
               className="inline-flex h-11 items-center justify-center rounded-md bg-white px-8 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
             >
               Start new training — upload selfies
             </Link>
-            <p className="text-xs text-zinc-500 mt-3">T02 implementation: drag & drop, resolution validation, client-side dataset ZIP, presigned URL flow ready for backend.</p>
+            <Link
+              href="/gallery"
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-white transition-colors hover:border-white/40"
+            >
+              Open gallery →
+            </Link>
           </div>
         </div>
       </div>
