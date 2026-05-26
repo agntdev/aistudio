@@ -1,6 +1,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default async function Dashboard() {
   const { userId } = await auth();
@@ -35,8 +37,14 @@ export default async function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-10 text-sm text-zinc-500">
-            This is your private dashboard. Start by training your first model from the homepage.
+          <div className="mt-10">
+            <Link 
+              href="/train" 
+              className="inline-flex h-11 items-center justify-center rounded-md bg-white px-8 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+            >
+              Start new training — upload selfies
+            </Link>
+            <p className="text-xs text-zinc-500 mt-3">T02 implementation: drag & drop, resolution validation, client-side dataset ZIP, presigned URL flow ready for backend.</p>
           </div>
         </div>
       </div>
