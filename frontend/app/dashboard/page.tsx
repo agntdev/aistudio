@@ -35,8 +35,16 @@ export default async function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-10 text-sm text-zinc-500">
-            This is your private dashboard. Start by training your first model from the homepage.
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-500">
+            <span>
+              This is your private dashboard. Start by training your first model from the homepage.
+            </span>
+            <a
+              href="/gallery"
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-white hover:border-white/40"
+            >
+              Open gallery →
+            </a>
           </div>
         </div>
       </div>
