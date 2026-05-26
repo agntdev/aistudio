@@ -1,63 +1,117 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-/**
- * POST /api/training/datasets/presigned
- *
- * Accepts a list of files (or a single dataset ZIP) and returns
- * presigned S3/DO Spaces PUT URLs.
- *
- * In production this would:
- * - Authenticate the user (Clerk)
- * - Generate real time-limited presigned URLs via AWS SDK / DigitalOcean Spaces
- * - Store metadata in the DB for later confirmation
- *
- * For the T02 bounty task, we return realistic-looking presigned URLs
- * so the frontend can demonstrate the full "get URLs → PUT files" flow.
- */
+const REGION = process.env.S3_REGION || 'us-east-1';
+const BUCKET = process.env.S3_BUCKET || 'aistudio-training-datasets';
+const ENDPOINT = process.env.S3_ENDPOINT;
+const EXPIRES_IN_SECONDS = 60 * 60;
+
+function buildClient():
+  | { ok: true; client: S3Client }
+  | { ok: false; error: string } {
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  if (!accessKeyId || !secretAccessKey) {
+    return {
+      ok: false,
+      error:
+        'S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set in the environment. See .env.example.',
+    };
+  }
+  return {
+    ok: true,
+    client: new S3Client({
+      region: REGION,
+      endpoint: ENDPOINT,
+      forcePathStyle: !!ENDPOINT,
+      credentials: { accessKeyId, secretAccessKey },
+    }),
+  };
+}
+
+interface FileMeta {
+  name: string;
+  size: number;
+  type: string;
+}
+
+async function signOne(client: S3Client, key: string, contentType: string) {
+  const cmd = new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(client, cmd, { expiresIn: EXPIRES_IN_SECONDS });
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const built = buildClient();
+    if (!built.ok) {
+      return NextResponse.json(
+        { error: 'S3 not configured', detail: built.error },
+        { status: 500 }
+      );
+    }
+    const s3 = built.client;
+
     const body = await req.json();
+    const { files, zipName } = body as {
+      files?: FileMeta[];
+      zipName?: string;
+    };
 
-    // Expected body shapes:
-    // { files: [{ name: string, size: number, type: string }], ... }
-    // or { zipName: string, size: number }
-    const { files, zipName, size } = body;
-
-    if (!files && !zipName) {
-      return NextResponse.json({ error: 'files or zipName required' }, { status: 400 });
+    if ((!files || !Array.isArray(files) || files.length === 0) && !zipName) {
+      return NextResponse.json(
+        { error: 'files[] or zipName required' },
+        { status: 400 }
+      );
     }
 
-    const uploads: any[] = [];
+    const prefix = `training-datasets/${Date.now()}`;
+    const uploads: Array<{
+      fileName: string;
+      key: string;
+      url: string;
+      expiresIn: number;
+    }> = [];
 
-    if (files && Array.isArray(files)) {
-      for (const f of files) {
-        // In real life: s3.getSignedUrl('putObject', { Key: `datasets/${userId}/${f.name}`, ... })
-        const key = `training-datasets/${Date.now()}-${f.name}`;
-        uploads.push({
-          fileName: f.name,
-          key,
-          url: `https://agnt-gm.ams3.digitaloceanspaces.com/${key}?X-Amz-Algorithm=...&X-Amz-Expires=3600&...`,
-          expiresIn: 3600,
-        });
-      }
-    } else if (zipName) {
-      const key = `training-datasets/${Date.now()}-${zipName}`;
-      uploads.push({
-        fileName: zipName,
-        key,
-        url: `https://agnt-gm.ams3.digitaloceanspaces.com/${key}?X-Amz-Algorithm=...&X-Amz-Expires=3600&...`,
-        expiresIn: 3600,
-      });
+    if (files && files.length > 0) {
+      await Promise.all(
+        files.map(async (f) => {
+          const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const key = `${prefix}/${safeName}`;
+          const url = await signOne(s3, key, f.type || 'application/octet-stream');
+          uploads.push({
+            fileName: f.name,
+            key,
+            url,
+            expiresIn: EXPIRES_IN_SECONDS,
+          });
+        })
+      );
+    }
+
+    if (zipName) {
+      const safeName = zipName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const key = `${prefix}/${safeName}`;
+      const url = await signOne(s3, key, 'application/zip');
+      uploads.push({ fileName: zipName, key, url, expiresIn: EXPIRES_IN_SECONDS });
     }
 
     return NextResponse.json({
       success: true,
+      bucket: BUCKET,
+      region: REGION,
       uploads,
-      // In a real system we would also return an uploadSessionId
-      // that the client uses when confirming the upload later.
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unknown';
     console.error('presigned error', err);
-    return NextResponse.json({ error: 'Failed to generate presigned URLs' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to generate presigned URLs', detail: message },
+      { status: 500 }
+    );
   }
 }

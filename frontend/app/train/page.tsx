@@ -13,7 +13,8 @@ interface SelectedFile {
   preview: string;
   width: number | null;
   height: number | null;
-  status: 'pending' | 'valid' | 'too_small' | 'invalid_type' | 'too_large';
+  status: 'pending' | 'valid' | 'too_small' | 'invalid_type' | 'too_large' | 'nsfw';
+  nsfw?: { isNSFW: boolean; confidence: number; className: string };
 }
 
 const MAX_IMAGES = 30;
@@ -25,6 +26,7 @@ export default function TrainUploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [zipReady, setZipReady] = useState(false);
+  // NSFW model is loaded once and reused; null until first call.
   const [nsfwModel, setNsfwModel] = useState<nsfwjs.NSFWJS | null>(null);
 
   const validateFile = async (file: File): Promise<SelectedFile> => {
@@ -110,12 +112,27 @@ export default function TrainUploadPage() {
 
     const validated = await Promise.all(toProcess.map(validateFile));
 
-    setFiles(prev => [...prev, ...validated]);
+    // Only run NSFW screening on images that passed the cheap checks.
+    const screened = await Promise.all(
+      validated.map(async (sf) => {
+        if (sf.status !== 'valid') return sf;
+        const nsfw = await checkNSFW(sf.file);
+        if (nsfw.isNSFW) {
+          return { ...sf, status: 'nsfw' as const, nsfw };
+        }
+        return { ...sf, nsfw };
+      })
+    );
+
+    setFiles(prev => [...prev, ...screened]);
     setIsProcessing(false);
 
-    const validCount = validated.filter(f => f.status === 'valid').length;
+    const validCount = screened.filter(f => f.status === 'valid').length;
+    const nsfwCount = screened.filter(f => f.status === 'nsfw').length;
     toast.success(`${validCount} image(s) ready for dataset`, {
-      description: `${validated.length - validCount} had validation issues`,
+      description:
+        `${screened.length - validCount} had issues` +
+        (nsfwCount > 0 ? ` (${nsfwCount} flagged NSFW)` : ''),
     });
   };
 
@@ -346,6 +363,7 @@ export default function TrainUploadPage() {
                       {item.status === 'too_small' && <AlertTriangle className="h-5 w-5 text-amber-500" />}
                       {item.status === 'invalid_type' && <AlertTriangle className="h-5 w-5 text-red-500" />}
                       {item.status === 'too_large' && <AlertTriangle className="h-5 w-5 text-red-500" />}
+                      {item.status === 'nsfw' && <Shield className="h-5 w-5 text-red-500" />}
                     </div>
                   </div>
                 ))}
@@ -368,10 +386,28 @@ export default function TrainUploadPage() {
                 <div className="flex justify-between"><span>Allowed formats</span><span>JPEG, PNG</span></div>
                 <div className="flex justify-between"><span>Max images</span><span className="font-mono">{MAX_IMAGES}</span></div>
 
-                <Button className="w-full mt-4" onClick={() => {
-                  // Re-validate all
-                  toast.info("Re-validation is automatic on add");
-                }}>
+                <Button
+                  className="w-full mt-4"
+                  disabled={isProcessing || files.length === 0}
+                  onClick={async () => {
+                    setIsProcessing(true);
+                    const revalidated = await Promise.all(
+                      files.map(async (sf) => {
+                        const base = await validateFile(sf.file);
+                        if (base.status !== 'valid') return base;
+                        const nsfw = await checkNSFW(sf.file);
+                        return nsfw.isNSFW
+                          ? { ...base, status: 'nsfw' as const, nsfw }
+                          : { ...base, nsfw };
+                      })
+                    );
+                    // Free old preview URLs before swapping in new ones.
+                    files.forEach((f) => URL.revokeObjectURL(f.preview));
+                    setFiles(revalidated);
+                    setIsProcessing(false);
+                    toast.success(`Re-validated ${revalidated.length} file(s)`);
+                  }}
+                >
                   Re-run validation
                 </Button>
               </CardContent>
