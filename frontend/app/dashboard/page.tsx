@@ -1,6 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
+import { SafetyPanel } from "@/components/SafetyPanel";
 
 export default async function Dashboard() {
   const { userId } = await auth();
@@ -37,6 +38,11 @@ export default async function Dashboard() {
 
           <div className="mt-10 text-sm text-zinc-500">
             This is your private dashboard. Start by training your first model from the homepage.
+          </div>
+
+          <div className="mt-12">
+            <h3 className="font-semibold tracking-tight mb-4 text-lg">Safety & Moderation (T06)</h3>
+            <SafetyPanel />
           </div>
         </div>
       </div>
