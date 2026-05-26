@@ -25,6 +25,7 @@ export default function TrainUploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [zipReady, setZipReady] = useState(false);
+  const [nsfwModel, setNsfwModel] = useState<nsfwjs.NSFWJS | null>(null);
 
   const validateFile = async (file: File): Promise<SelectedFile> => {
     const preview = URL.createObjectURL(file);

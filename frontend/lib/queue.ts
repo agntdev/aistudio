@@ -5,29 +5,23 @@ import Replicate from 'replicate';
 /**
  * T03: Training Pipeline Infrastructure
  *
- * This sets up BullMQ + Redis for reliable, queued training jobs.
- *
- * Why BullMQ?
- * - At-least-once delivery
- * - Job progress tracking
- * - Retries with backoff
- * - Concurrency control (important because training is expensive)
- * - Webhook-friendly (we can update job progress from Replicate webhooks)
+ * BullMQ + Redis-backed training queue with:
+ * - At-least-once delivery + exponential backoff retries
+ * - Webhook-driven progress updates from Replicate
+ * - Concurrency control (training is expensive)
  */
 
-const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null, // Required by BullMQ
-});
+const connection = new IORedis(
+  process.env.REDIS_URL || 'redis://localhost:6379',
+  { maxRetriesPerRequest: null }
+);
 
 export const trainingQueue = new Queue('training', {
   connection,
   defaultJobOptions: {
     attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 5000,
-    },
-    removeOnComplete: 100, // keep last 100 completed jobs
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: 100,
     removeOnFail: 500,
   },
 });
@@ -35,70 +29,73 @@ export const trainingQueue = new Queue('training', {
 export interface TrainingJobData {
   projectId: string;
   agentId: string;
-  datasetUrl: string; // The uploaded ZIP or folder on S3/DO Spaces
-  triggerWord: string; // e.g. "TOK" or the person's name
+  datasetUrl: string;
+  triggerWord: string;
   modelName?: string;
   resolution?: number;
   steps?: number;
-  // Other LoRA hyperparameters
+  replicateTrainingId?: string;
+  modelVersion?: string;
+  lastError?: string;
 }
 
 export type TrainingJob = Job<TrainingJobData>;
 
-/**
- * Enqueue a new training job.
- * Called from the frontend after successful dataset upload (T02).
- */
 export async function enqueueTrainingJob(data: TrainingJobData) {
-  const job = await trainingQueue.add('train-lora', data, {
-    // Optional: jobId can be used for idempotency
-  });
-  return job;
+  return trainingQueue.add('train-lora', data);
 }
 
 /**
- * Worker setup (run in a separate process or via `npm run worker`)
- * This is where the actual Replicate/Fal call happens.
+ * Persisted mapping from Replicate training id -> BullMQ job id.
+ * Stored in Redis so webhook handlers (different process) can resolve the job.
  */
+const TRAINING_INDEX_KEY = 'training:replicate-id-index';
+
+export async function indexTrainingId(replicateTrainingId: string, jobId: string) {
+  await connection.hset(TRAINING_INDEX_KEY, replicateTrainingId, jobId);
+}
+
+export async function lookupJobByTrainingId(
+  replicateTrainingId: string
+): Promise<TrainingJob | undefined> {
+  const jobId = await connection.hget(TRAINING_INDEX_KEY, replicateTrainingId);
+  if (!jobId) return undefined;
+  return (await trainingQueue.getJob(jobId)) as TrainingJob | undefined;
+}
+
 export function createTrainingWorker() {
-  const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN,
-  });
+  const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
 
   return new Worker<TrainingJobData>(
     'training',
     async (job) => {
-      console.log(`[TrainingWorker] Processing job ${job.id} for project ${job.data.projectId}`);
-
       const { datasetUrl, triggerWord, resolution = 512, steps = 1000 } = job.data;
 
-      // 1. Start the actual Replicate training
-      // Using a popular Flux LoRA trainer (update model version as needed)
-      const training = await replicate.trainings.create({
-        version: "ostris/flux-dev-lora-trainer:4e0a6b2c1f8e9d7a3b5c6d4e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a", // placeholder - use latest from Replicate
-        input: {
-          input_images: datasetUrl, // zip URL from DO Spaces
-          trigger_word: triggerWord,
-          resolution,
-          steps,
-          // other hyperparameters can come from job.data
-        },
-        webhook: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/replicate`,
-        webhook_events_filter: ["start", "logs", "completed"],
-      });
+      const training = await replicate.trainings.create(
+        // owner/model (the LoRA trainer's full slug) is required; version is
+        // resolved at call-time by Replicate when omitted from this object.
+        'ostris',
+        'flux-dev-lora-trainer',
+        process.env.REPLICATE_TRAINER_VERSION ||
+          '4e0a6b2c1f8e9d7a3b5c6d4e7f8a9b0c1d2e3f4a',
+        {
+          destination: (process.env.REPLICATE_DESTINATION ||
+            'aistudio/user-lora') as `${string}/${string}`,
+          input: {
+            input_images: datasetUrl,
+            trigger_word: triggerWord,
+            resolution,
+            steps,
+          },
+          webhook: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/replicate`,
+          webhook_events_filter: ['start', 'logs', 'completed'],
+        }
+      );
 
-      console.log(`[TrainingWorker] Started Replicate training: ${training.id}`);
-
+      await job.updateData({ ...job.data, replicateTrainingId: training.id });
+      await indexTrainingId(training.id, String(job.id));
       await job.updateProgress(20);
 
-      // Store the training ID on the job for webhook correlation
-      await job.updateData({
-        ...job.data,
-        replicateTrainingId: training.id,
-      });
-
-      // The actual completion will be handled by the webhook
-      // For now we return the training ID so the caller can track it
       return {
         status: 'started',
         replicateTrainingId: training.id,
@@ -109,16 +106,44 @@ export function createTrainingWorker() {
   );
 }
 
-// Example: Start the worker when this file is run directly
-if (require.main === module) {
-  console.log('Starting training worker...');
-  const worker = createTrainingWorker();
+/**
+ * Apply a Replicate webhook payload to the matching BullMQ job.
+ * Resolves the job via the replicate-id index so the webhook handler
+ * (different process / serverless) can update progress without holding
+ * a worker reference.
+ */
+export async function handleReplicateWebhook(payload: {
+  id?: string;
+  status?: string;
+  progress?: number;
+  error?: string;
+  output?: { version?: string; weights?: string } | null;
+  logs?: string;
+}) {
+  const trainingId = payload.id;
+  if (!trainingId) return { matched: false, reason: 'no-id' };
 
-  worker.on('completed', (job) => {
-    console.log(`Job ${job.id} completed`);
-  });
+  const job = await lookupJobByTrainingId(trainingId);
+  if (!job) return { matched: false, reason: 'no-job-for-training-id' };
 
-  worker.on('failed', (job, err) => {
-    console.error(`Job ${job?.id} failed:`, err);
-  });
+  if (typeof payload.progress === 'number') {
+    await job.updateProgress(Math.max(20, Math.min(99, payload.progress)));
+  }
+
+  if (payload.status === 'succeeded') {
+    await job.updateProgress(100);
+    await job.updateData({
+      ...job.data,
+      modelVersion: payload.output?.version ?? payload.output?.weights ?? 'unknown',
+    });
+  }
+
+  if (payload.status === 'failed' || payload.status === 'canceled') {
+    await job.updateData({
+      ...job.data,
+      lastError: payload.error || payload.status,
+    });
+  }
+
+  return { matched: true, jobId: job.id, status: payload.status };
 }
