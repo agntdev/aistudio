@@ -5,7 +5,7 @@ import { Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { checkPromptSafety } from '@/lib/safety';
+import { BLOCKED_PROMPT_KEYWORDS, checkPromptSafety } from '@/lib/safety';
 import { LivenessVerification } from './LivenessVerification';
 
 export function SafetyPanel() {
@@ -83,7 +83,7 @@ export function SafetyPanel() {
           )}
 
           <div className="text-[10px] text-zinc-500">
-            Blocklist contains {checkPromptSafety('').blockedTerms.length} terms (NSFW, violence, minors, hate, etc.).
+            Blocklist contains {BLOCKED_PROMPT_KEYWORDS.length} terms (NSFW, violence, minors, hate, etc.).
             Full list enforced server-side as well.
           </div>
         </CardContent>
