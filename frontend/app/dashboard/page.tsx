@@ -2,7 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { SafetyPanel } from "@/components/SafetyPanel";
 
 export default async function Dashboard() {
   const { userId } = await auth();
@@ -50,6 +50,11 @@ export default async function Dashboard() {
             >
               Open gallery →
             </Link>
+          </div>
+
+          <div className="mt-12">
+            <h3 className="font-semibold tracking-tight mb-4 text-lg">Safety & Moderation (T06)</h3>
+            <SafetyPanel />
           </div>
         </div>
       </div>
