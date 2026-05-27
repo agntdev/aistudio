@@ -77,3 +77,18 @@ CREATE TABLE IF NOT EXISTS gdpr_erasures (
   models_deleted  INTEGER NOT NULL DEFAULT 0,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- T05: Credit ledger — immutable audit trail for every credit movement.
+CREATE TABLE IF NOT EXISTS credit_ledger (
+  id                TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  user_id           TEXT NOT NULL,
+  amount            INTEGER NOT NULL,
+  balance_after     INTEGER NOT NULL,
+  reason            TEXT NOT NULL
+                      CHECK (reason IN ('free_tier', 'purchase', 'refund', 'generation', 'admin_grant', 'admin_deduction', 'subscription_renewal')),
+  stripe_session_id TEXT,
+  metadata          JSONB,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS credit_ledger_user_id_idx ON credit_ledger(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS credit_ledger_stripe_session_idx ON credit_ledger(stripe_session_id);
