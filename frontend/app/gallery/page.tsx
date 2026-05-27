@@ -1,15 +1,21 @@
-'use client';
+"use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Download,
   ZoomIn,
@@ -21,10 +27,10 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-} from 'lucide-react';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { toast } from "sonner";
 
-type GenerationStatus = 'succeeded' | 'processing' | 'failed' | 'queued';
+type GenerationStatus = "succeeded" | "processing" | "failed" | "queued";
 
 interface Generation {
   id: string;
@@ -50,17 +56,20 @@ interface ListResponse {
 }
 
 const PAGE_SIZE = 12;
-const STATUS_FILTERS: Array<{ key: GenerationStatus | 'all'; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'succeeded', label: 'Completed' },
-  { key: 'processing', label: 'Processing' },
-  { key: 'queued', label: 'Queued' },
-  { key: 'failed', label: 'Failed' },
-];
+const STATUS_FILTERS: Array<{ key: GenerationStatus | "all"; label: string }> =
+  [
+    { key: "all", label: "All" },
+    { key: "succeeded", label: "Completed" },
+    { key: "processing", label: "Processing" },
+    { key: "queued", label: "Queued" },
+    { key: "failed", label: "Failed" },
+  ];
 
 export default function GalleryPage() {
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<GenerationStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<GenerationStatus | "all">(
+    "all",
+  );
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Generation | null>(null);
@@ -73,37 +82,46 @@ export default function GalleryPage() {
         page: String(page),
         pageSize: String(PAGE_SIZE),
       });
-      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (statusFilter !== "all") params.set("status", statusFilter);
       const res = await fetch(`/api/generations?${params}`);
       const json = (await res.json()) as ListResponse;
       setData(json);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to load gallery');
+      toast.error("Failed to load gallery");
     } finally {
       setLoading(false);
     }
   }, [page, statusFilter]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: fetch data when deps change */
   useEffect(() => {
     fetchPage();
   }, [fetchPage]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Live progress updates via SSE for non-terminal jobs on this page.
   const liveIds = useMemo(
     () =>
       data?.items
-        .filter((g) => g.status === 'processing' || g.status === 'queued')
+        .filter((g) => g.status === "processing" || g.status === "queued")
         .map((g) => g.id) ?? [],
-    [data]
+    [data],
   );
 
   useEffect(() => {
     if (liveIds.length === 0) return;
     const es = new EventSource(
-      `/api/generations/stream?ids=${encodeURIComponent(liveIds.join(','))}`
+      `/api/generations/stream?ids=${encodeURIComponent(liveIds.join(","))}`,
     );
-    const applyUpdate = (updates: Array<{ id: string; status: GenerationStatus; progress: number; imageUrl: string | null }>) => {
+    const applyUpdate = (
+      updates: Array<{
+        id: string;
+        status: GenerationStatus;
+        progress: number;
+        imageUrl: string | null;
+      }>,
+    ) => {
       setData((prev) => {
         if (!prev) return prev;
         const byId = new Map(updates.map((u) => [u.id, u]));
@@ -119,21 +137,27 @@ export default function GalleryPage() {
               imageUrl: u.imageUrl ?? g.imageUrl,
               thumbnailUrl:
                 u.imageUrl && !g.thumbnailUrl
-                  ? u.imageUrl.replace('/768/1024', '/384/512')
+                  ? u.imageUrl.replace("/768/1024", "/384/512")
                   : g.thumbnailUrl,
             };
           }),
         };
       });
     };
-    es.addEventListener('snapshot', (e) => applyUpdate(JSON.parse((e as MessageEvent).data)));
-    es.addEventListener('progress', (e) => applyUpdate(JSON.parse((e as MessageEvent).data)));
-    es.addEventListener('done', () => es.close());
+    es.addEventListener("snapshot", (e) =>
+      applyUpdate(JSON.parse((e as MessageEvent).data)),
+    );
+    es.addEventListener("progress", (e) =>
+      applyUpdate(JSON.parse((e as MessageEvent).data)),
+    );
+    es.addEventListener("done", () => es.close());
     es.onerror = () => es.close();
     return () => es.close();
-  }, [liveIds.join(',')]);
+  }, [liveIds.join(",")]);
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const totalPages = data
+    ? Math.max(1, Math.ceil(data.total / data.pageSize))
+    : 1;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -144,15 +168,20 @@ export default function GalleryPage() {
             <span className="font-semibold text-xl">AIStudio</span>
             <span className="text-zinc-500">/ Gallery</span>
           </div>
-          <Button variant="ghost" onClick={() => window.history.back()}>← Back</Button>
+          <Button variant="ghost" onClick={() => window.history.back()}>
+            ← Back
+          </Button>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-10">
         <header className="mb-8">
-          <h1 className="text-4xl font-semibold tracking-tight">Your generations</h1>
+          <h1 className="text-4xl font-semibold tracking-tight">
+            Your generations
+          </h1>
           <p className="text-zinc-400 mt-1">
-            {data ? `${data.total} total` : 'Loading…'} — click any image to open the viewer
+            {data ? `${data.total} total` : "Loading…"} — click any image to
+            open the viewer
           </p>
         </header>
 
@@ -161,7 +190,7 @@ export default function GalleryPage() {
             <Button
               key={f.key}
               size="sm"
-              variant={statusFilter === f.key ? 'default' : 'outline'}
+              variant={statusFilter === f.key ? "default" : "outline"}
               onClick={() => {
                 setStatusFilter(f.key);
                 setPage(1);
@@ -185,7 +214,14 @@ export default function GalleryPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {data?.items.map((g) => (
-              <GalleryTile key={g.id} g={g} onOpen={() => { setSelected(g); setZoom(1); }} />
+              <GalleryTile
+                key={g.id}
+                g={g}
+                onOpen={() => {
+                  setSelected(g);
+                  setZoom(1);
+                }}
+              />
             ))}
           </div>
         )}
@@ -228,12 +264,12 @@ export default function GalleryPage() {
 }
 
 function GalleryTile({ g, onOpen }: { g: Generation; onOpen: () => void }) {
-  const isDone = g.status === 'succeeded';
+  const isDone = g.status === "succeeded";
   return (
     <button
       onClick={isDone ? onOpen : undefined}
       className={`group relative aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-zinc-900 text-left ${
-        isDone ? 'cursor-zoom-in hover:border-white/30' : 'cursor-default'
+        isDone ? "cursor-zoom-in hover:border-white/30" : "cursor-default"
       }`}
     >
       {isDone && g.thumbnailUrl ? (
@@ -267,21 +303,21 @@ function GalleryTile({ g, onOpen }: { g: Generation; onOpen: () => void }) {
 }
 
 function StatusPill({ status }: { status: GenerationStatus }) {
-  if (status === 'succeeded') {
+  if (status === "succeeded") {
     return (
       <span className="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
         <CheckCircle2 className="h-3 w-3" /> done
       </span>
     );
   }
-  if (status === 'processing') {
+  if (status === "processing") {
     return (
       <span className="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">
         <Loader2 className="h-3 w-3 animate-spin" /> running
       </span>
     );
   }
-  if (status === 'queued') {
+  if (status === "queued") {
     return (
       <span className="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-zinc-500/15 text-zinc-300 border border-zinc-500/30">
         <Clock className="h-3 w-3" /> queued
@@ -295,13 +331,19 @@ function StatusPill({ status }: { status: GenerationStatus }) {
   );
 }
 
-function StatusBadge({ status, progress }: { status: GenerationStatus; progress: number }) {
-  if (status === 'processing' || status === 'queued') {
+function StatusBadge({
+  status,
+  progress,
+}: {
+  status: GenerationStatus;
+  progress: number;
+}) {
+  if (status === "processing" || status === "queued") {
     return (
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-zinc-400 mb-3" />
         <div className="text-xs text-zinc-400">
-          {status === 'queued' ? 'Queued' : `Generating ${progress}%`}
+          {status === "queued" ? "Queued" : `Generating ${progress}%`}
         </div>
         <div className="mt-2 mx-auto h-1 w-24 rounded-full bg-white/10 overflow-hidden">
           <div
@@ -339,17 +381,17 @@ function ViewerDialog({
       const res = await fetch(generation.imageUrl);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `${generation.id}.jpg`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Image downloaded');
+      toast.success("Image downloaded");
     } catch (err) {
       console.error(err);
-      toast.error('Download failed');
+      toast.error("Download failed");
     }
   };
 
@@ -374,7 +416,7 @@ function ViewerDialog({
                   alt={generation.prompt}
                   style={{
                     transform: `scale(${zoom})`,
-                    transformOrigin: 'top left',
+                    transformOrigin: "top left",
                     width: `${100 / zoom}%`,
                   }}
                   className="block transition-transform"
@@ -385,7 +427,8 @@ function ViewerDialog({
             <div className="flex items-center justify-between gap-3 mt-2">
               <div className="text-xs text-zinc-500">
                 {generation.width}×{generation.height}
-                {generation.durationMs && ` • ${(generation.durationMs / 1000).toFixed(1)}s`}
+                {generation.durationMs &&
+                  ` • ${(generation.durationMs / 1000).toFixed(1)}s`}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -407,7 +450,11 @@ function ViewerDialog({
                 >
                   <ZoomIn className="h-4 w-4" />
                 </Button>
-                <Button size="sm" onClick={download} disabled={!generation.imageUrl}>
+                <Button
+                  size="sm"
+                  onClick={download}
+                  disabled={!generation.imageUrl}
+                >
                   <Download className="h-4 w-4 mr-1" /> Download
                 </Button>
               </div>

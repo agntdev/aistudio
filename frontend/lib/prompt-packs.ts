@@ -38,104 +38,105 @@ export interface PromptPack {
 }
 
 const BASE_NEGATIVE =
-  'low quality, blurry, deformed, distorted, watermark, signature, text, extra limbs, extra fingers, bad anatomy';
+  "low quality, blurry, deformed, distorted, watermark, signature, text, extra limbs, extra fingers, bad anatomy";
 
 export const PROMPT_PACKS: PromptPack[] = [
   {
-    id: 'studio-portrait',
-    name: 'Studio Portrait',
+    id: "studio-portrait",
+    name: "Studio Portrait",
     description:
-      'Editorial-grade headshots with controlled lighting and clean backdrops.',
+      "Editorial-grade headshots with controlled lighting and clean backdrops.",
     defaultNegativePrompt: BASE_NEGATIVE,
     defaults: { width: 832, height: 1216, steps: 28, guidanceScale: 3.5 },
     templates: [
       {
-        name: 'Beauty light',
+        name: "Beauty light",
         template:
-          'portrait photograph of {trigger_word}, beauty lighting, soft key + reflector, neutral gray background, sharp focus, 85mm lens, shot on Hasselblad',
+          "portrait photograph of {trigger_word}, beauty lighting, soft key + reflector, neutral gray background, sharp focus, 85mm lens, shot on Hasselblad",
       },
       {
-        name: 'Rembrandt',
+        name: "Rembrandt",
         template:
-          'portrait of {trigger_word}, classical Rembrandt lighting, dark background, subtle film grain, art-directed pose',
+          "portrait of {trigger_word}, classical Rembrandt lighting, dark background, subtle film grain, art-directed pose",
       },
       {
-        name: 'Black and white',
+        name: "Black and white",
         template:
-          'black and white editorial portrait of {trigger_word}, contrasty studio lighting, silver halide tones, fashion magazine style',
+          "black and white editorial portrait of {trigger_word}, contrasty studio lighting, silver halide tones, fashion magazine style",
       },
     ],
   },
   {
-    id: 'cinematic',
-    name: 'Cinematic',
+    id: "cinematic",
+    name: "Cinematic",
     description:
-      'Wide-format scenes with film-stock colour grades and dramatic atmosphere.',
-    defaultNegativePrompt: BASE_NEGATIVE + ', cgi, cartoon',
+      "Wide-format scenes with film-stock colour grades and dramatic atmosphere.",
+    defaultNegativePrompt: BASE_NEGATIVE + ", cgi, cartoon",
     defaults: { width: 1216, height: 832, steps: 30, guidanceScale: 4 },
     templates: [
       {
-        name: 'Night street',
+        name: "Night street",
         template:
-          'cinematic still of {trigger_word} on a rain-slick neon-lit city street at night, anamorphic lens flare, Roger Deakins style, shallow depth of field',
+          "cinematic still of {trigger_word} on a rain-slick neon-lit city street at night, anamorphic lens flare, Roger Deakins style, shallow depth of field",
       },
       {
-        name: 'Golden hour',
+        name: "Golden hour",
         template:
-          'cinematic still of {trigger_word} backlit by golden hour sun, hazy bokeh, warm Kodak Portra 400 grade, long lens',
+          "cinematic still of {trigger_word} backlit by golden hour sun, hazy bokeh, warm Kodak Portra 400 grade, long lens",
       },
       {
-        name: 'Brutalist concrete',
+        name: "Brutalist concrete",
         template:
-          'cinematic medium shot of {trigger_word} against a brutalist concrete wall, cool teal-orange grade, fashion editorial feel',
+          "cinematic medium shot of {trigger_word} against a brutalist concrete wall, cool teal-orange grade, fashion editorial feel",
       },
     ],
   },
   {
-    id: 'editorial-fashion',
-    name: 'Editorial Fashion',
-    description: 'High-end magazine fashion editorials with stylised wardrobe.',
-    defaultNegativePrompt: BASE_NEGATIVE + ', amateur, snapshot',
+    id: "editorial-fashion",
+    name: "Editorial Fashion",
+    description: "High-end magazine fashion editorials with stylised wardrobe.",
+    defaultNegativePrompt: BASE_NEGATIVE + ", amateur, snapshot",
     defaults: { width: 832, height: 1216, steps: 28, guidanceScale: 3.5 },
     templates: [
       {
-        name: 'Vogue cover',
+        name: "Vogue cover",
         template:
-          'editorial cover photograph of {trigger_word}, full-page Vogue layout, designer outfit, dramatic posture, location shoot',
+          "editorial cover photograph of {trigger_word}, full-page Vogue layout, designer outfit, dramatic posture, location shoot",
       },
       {
-        name: 'Avant-garde',
+        name: "Avant-garde",
         template:
-          'avant-garde fashion editorial of {trigger_word}, conceptual styling, oversized silhouettes, studio with coloured gels',
+          "avant-garde fashion editorial of {trigger_word}, conceptual styling, oversized silhouettes, studio with coloured gels",
       },
       {
-        name: 'Streetwear',
+        name: "Streetwear",
         template:
-          'streetwear lookbook photograph of {trigger_word}, contemporary urban setting, layered outfit, candid posture',
+          "streetwear lookbook photograph of {trigger_word}, contemporary urban setting, layered outfit, candid posture",
       },
     ],
   },
   {
-    id: 'travel',
-    name: 'Travel',
-    description: 'Destination-style images placing the subject in iconic locations.',
+    id: "travel",
+    name: "Travel",
+    description:
+      "Destination-style images placing the subject in iconic locations.",
     defaultNegativePrompt: BASE_NEGATIVE,
     defaults: { width: 1216, height: 832, steps: 28, guidanceScale: 3.5 },
     templates: [
       {
-        name: 'Italian coast',
+        name: "Italian coast",
         template:
-          'photograph of {trigger_word} on a sun-drenched Italian coastline, Amalfi cliffs in background, linen outfit, magazine travel feature style',
+          "photograph of {trigger_word} on a sun-drenched Italian coastline, Amalfi cliffs in background, linen outfit, magazine travel feature style",
       },
       {
-        name: 'Tokyo night',
+        name: "Tokyo night",
         template:
-          'photograph of {trigger_word} in Shibuya at night, vibrant neon signs reflecting on wet pavement, candid posture, cinematic atmosphere',
+          "photograph of {trigger_word} in Shibuya at night, vibrant neon signs reflecting on wet pavement, candid posture, cinematic atmosphere",
       },
       {
-        name: 'Alpine hike',
+        name: "Alpine hike",
         template:
-          'photograph of {trigger_word} on an Alpine mountain pass, technical hiking gear, dramatic clouds, golden afternoon light',
+          "photograph of {trigger_word} on an Alpine mountain pass, technical hiking gear, dramatic clouds, golden afternoon light",
       },
     ],
   },
@@ -146,7 +147,7 @@ export interface ExpandedPrompt {
   templateName: string;
   prompt: string;
   negativePrompt: string;
-  defaults: PromptPack['defaults'];
+  defaults: PromptPack["defaults"];
 }
 
 /**
@@ -157,7 +158,7 @@ export interface ExpandedPrompt {
 export function expandPack(
   packId: string,
   triggerWord: string,
-  extras: Record<string, string> = {}
+  extras: Record<string, string> = {},
 ): ExpandedPrompt[] {
   const pack = PROMPT_PACKS.find((p) => p.id === packId);
   if (!pack) throw new Error(`unknown prompt pack: ${packId}`);
@@ -167,7 +168,7 @@ export function expandPack(
     prompt: substitute(t.template, { trigger_word: triggerWord, ...extras }),
     negativePrompt: [pack.defaultNegativePrompt, t.negativePromptExtras]
       .filter(Boolean)
-      .join(', '),
+      .join(", "),
     defaults: pack.defaults,
   }));
 }
@@ -184,7 +185,8 @@ function substitute(tpl: string, vars: Record<string, string>): string {
   });
 }
 
-export function listPromptPacks(): Array<Omit<PromptPack, 'templates'>> {
+export function listPromptPacks(): Array<Omit<PromptPack, "templates">> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return PROMPT_PACKS.map(({ templates, ...rest }) => rest);
 }
 
